@@ -1,0 +1,25 @@
+version: '3'
+
+env:
+  ENV: dev
+  COMPOSE_PROJECT_NAME: sai708th-dotfiles
+
+tasks:
+  list:
+    dir: .
+    cmds:
+      - task --list-all
+  nvim:run:
+    dir: dotfiles
+    cmds:
+      - docker run --rm -it --platform linux/amd64 sai708th/dotfiles:nvim tmux
+  rvljs:up:
+    #https://qiita.com/uphy/items/61e875f97bbb58a75beb
+    dir: reveal.js
+    cmds:
+      - docker compose up -d
+  rvljs:down:
+    #https://qiita.com/uphy/items/61e875f97bbb58a75beb
+    dir: reveal.js
+    cmds:
+      - docker compose down
