@@ -6,6 +6,7 @@ services:
     build:
         context: .
         dockerfile: Dockerfile
+    image: sai708th/rtty:base
     command: ["zsh", "-ic", "/go/bin/rtty run zsh -p 10000 --addr 0.0.0.0 --font 'Monaco' --font-size 16"]
     ports:
       - "10000:10000"
