@@ -9,10 +9,27 @@ tasks:
     dir: .
     cmds:
       - task --list-all
+  nvim:build:
+    dir: dotfiles
+    cmds: 
+      - docker image build -t sai708th/dotfiles:nvim --platform=linux/arm64 --no-cache .
   nvim:run:
     dir: dotfiles
     cmds:
-      - docker run --rm -it --platform linux/amd64 sai708th/dotfiles:nvim tmux
+      - docker run --rm -it --platform linux/arm64 sai708th/dotfiles:nvim zsh
+  nvim:run2:
+    dir: dotfiles
+    cmds:
+      - docker run --rm -it --platform linux/amd64 --no-cache sai708th/dotfiles:nvim zsh
+  rtty:run:
+    dir: rtty
+    cmds:
+      - docker compose run -d rtty
+      - docker compose exec rtty /go/bin/rtty run zsh -p 10000 --addr 0.0.0.0 --font 'Monaco' --font-size 16
+  rtty:down:
+    dir: rtty
+    cmds:
+      - docker compose down
   rvljs:up:
     #https://qiita.com/uphy/items/61e875f97bbb58a75beb
     dir: reveal.js

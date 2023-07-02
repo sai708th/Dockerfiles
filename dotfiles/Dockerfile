@@ -17,9 +17,11 @@ ENV LANG ja_JP.UTF-8
 ENV LANGUAGE ja_JP:ja
 ENV LC_ALL ja_JP.UTF-8
 ENV TZ JST-9
-ENV TERM xterm
+ENV TERM xterm-256color
 
-#nvim install
+#-----------------------------
+#   nvim install
+#-----------------------------
 RUN wget https://github.com/neovim/neovim/releases/download/v0.9.1/nvim-linux64.tar.gz && \
     tar -zxvf nvim-linux64.tar.gz && \
     mv nvim-linux64/bin/nvim usr/bin/nvim && \
@@ -30,29 +32,32 @@ RUN wget https://github.com/neovim/neovim/releases/download/v0.9.1/nvim-linux64.
 
 RUN pip3 install neovim pynvim
 
+
+#-----------------------------
+#   dotfiles
+#-----------------------------
 RUN git clone https://github.com/sai708th/dotfiles.git
 
-RUN echo 'source /dotfiles/_zshrc' > ~/.zshrc   &&\
-    rm ~/.bashrc                                &&\
+#zshrc and bashrc
+RUN ln -s /dotfiles/_zshrc ~/.zshrc             &&\
     echo 'source /dotfiles/_bashrc' > ~/.bashrc 
 
+#zplug
+RUN curl -sL --proto-redir -all,https https://raw.githubusercontent.com/zplug/installer/master/installer.zsh | zsh
+
 #XDG Directory Configuration
-RUN mkdir /XDG && cd /XDG             &&\
-    mkdir cache                       &&\
-    mkdir runtime                     &&\
-    mkdir config                      &&\
-    mkdir config/nvim                 &&\
-    mkdir -p data/nvim/site/autoload  &&\
-    ln -s /dotfiles/init.vim /XDG/config/nvim/init.vim
+RUN mkdir /XDG && cd /XDG                              &&\
+    mkdir cache                                        &&\
+    mkdir runtime                                      &&\
+    mkdir config                                       &&\
+    mkdir config/nvim                                  &&\
+    mkdir -p data/nvim/site/autoload                   &&\
+    ln -s /dotfiles/init.vim /XDG/config/nvim/init.vim &&\
+    ln -s /dotfiles/_gitconfig ~/.gitconfig            &&\
+    ln -s /dotfiles/_tmux.conf ~/.tmux.conf
 
 #deno
 RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh
-
-#env XDG_HOME='/XDG'
-#env XDG_CACHE_HOME='/XDG/cache'
-#env XDG_DATA_HOME='/XDG/data'
-#env XDG_CONFIG_HOME='/XDG/config'
-#env XDG_RUNTIME_DIR='/XDG/runtime'
 
 #plug
 RUN curl -fLo "${XDG_DATA_HOME:-$HOME/.local/share}"/nvim/site/autoload/plug.vim --create-dirs \
@@ -65,4 +70,4 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - &&\
     apt install -y nodejs && \
     npm install -g vim-language-server
 
-CMD zsh
+
