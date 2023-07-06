@@ -10,4 +10,8 @@ services:
     command: ["zsh", "-ic", "/root/go/bin/rtty run zsh -p 10000 --addr 0.0.0.0 --font 'Monaco' --font-size 16"]
     ports:
       - "10000:10000"
+    volumes:
+      - type: bind
+        source: ~/Dev
+        target: /root/Dev
 
