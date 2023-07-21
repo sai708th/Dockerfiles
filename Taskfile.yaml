@@ -43,3 +43,17 @@ tasks:
     dir: reveal.js
     cmds:
       - docker compose down
+
+
+#rb:
+#  dir: .
+#  cmds:
+#    - docker compose build
+#up:
+#  dir: .
+#  cmds:
+#    - docker compose up -d
+#dn:
+#  dir: .
+#  cmds:
+#    - docker compose down
