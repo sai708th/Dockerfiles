@@ -43,6 +43,14 @@ tasks:
     dir: reveal.js
     cmds:
       - docker compose down
+  pipr:build:
+    dir: pipr
+    cmds:
+      - docker image build -t sai708th/pipr:base --no-cache .
+  pipr:run:
+    dir: pipr
+    cmds:
+      - docker run --privileged -v $(pwd):/var/pipr -v $HOME/.config/pipr:/root/.config/pipr -it --rm sai708th/pipr:base pipr $@
 
 
 #rb:
