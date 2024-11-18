@@ -18,6 +18,19 @@ tasks:
     cmds:
       - docker run --rm -it --platform linux/arm64 sai708th/dotfiles:nvim zsh
 
+  wpup:
+    dir: wordpress
+    cmds:
+      - docker compose up -d
+  wpdn:
+    dir: wordpress
+    cmds:
+      - docker compose down -v
+  wpin:
+    dir: wordpress
+    cmds:
+      - docker exec -it -w /var/www/html/wp-content wordpress bash
+
 #rb:
 #  dir: .
 #  cmds:
