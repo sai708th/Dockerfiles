@@ -1,0 +1,33 @@
+version: '3'
+
+env:
+  ENV: dev
+  COMPOSE_PROJECT_NAME: wordpress
+
+tasks:
+  list:
+    dir: .
+    cmds:
+      - task --list-all
+
+  wpup:
+    dir: wordpress
+    cmds:
+      - docker compose up -d
+  wpdn:
+    dir: wordpress
+    cmds:
+      - docker compose down -v
+  wpin:
+    dir: wordpress
+    cmds:
+      - docker exec -it -w /var/www/html/wp-content wordpress bash
+  wprb:
+    dir: wordpress
+    cmds:
+      - docker-compose down && docker-compose rm -f && docker image prune -f && docker-compose up --build -d
+  wprm:
+    dir: wordpress
+    cmds:
+      - docker-compose down --rmi all
+
