@@ -2,7 +2,7 @@
 FROM wordpress:latest
 
 # 必要なパッケージの更新とvimのインストール
-RUN apt-get update && apt-get install -y vim 
+RUN apt-get update && apt-get install -y vim default-mysql-client
 
 # wp-cliをインストール
 RUN curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar \
