@@ -1,8 +1,22 @@
 version: '3'
 
+vars:
+  # ディレクトリの絶対パスを取得し、md5sum → 先頭6文字 を使う例
+  #   - Mac環境では `md5sum` が使えないことが多いので、
+  #     Homebrewで coreutils を入れて `md5sum` を使うか、
+  #     もしくは `md5 -q` などで対応してください。
+  #
+  # 例: 
+  #   ディレクトリ /home/yourname/projects/wordpress
+  #   → md5sum は 5d41402abc4b2a76b9719d911017c592 ... (例)
+  #   → cut で頭6文字: 5d4140
+  PROJECT_HASH:
+    sh: echo -n $(pwd) | md5sum | cut -c1-6
+
 env:
   ENV: dev
-  COMPOSE_PROJECT_NAME: wordpress
+  # 「wp + ハッシュ」の形にする → e.g.  wp5d4140
+  COMPOSE_PROJECT_NAME: wp-{{.PROJECT_HASH}}
 
 tasks:
   list:
@@ -21,7 +35,7 @@ tasks:
   wpin:
     dir: wordpress
     cmds:
-      - docker exec -it -w /var/www/html/wp-content wordpress bash
+      - docker compose exec -it -w /var/www/html/wp-content wordpress bash
   wprb:
     dir: wordpress
     cmds:
@@ -29,5 +43,5 @@ tasks:
   wprm:
     dir: wordpress
     cmds:
-      - docker-compose down --rmi all
+      - docker-compose down --rmi local
 
