@@ -31,7 +31,7 @@ tasks:
   wpdn:
     dir: wordpress
     cmds:
-      - docker compose down -v
+      - docker compose down 
   wpin:
     dir: wordpress
     cmds:
@@ -43,5 +43,5 @@ tasks:
   wprm:
     dir: wordpress
     cmds:
-      - docker-compose down --rmi local
+      - docker-compose down --rmi -v local
 
