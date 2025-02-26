@@ -35,7 +35,7 @@ tasks:
   wpin:
     dir: wordpress
     cmds:
-      - docker compose exec -it -w /var/www/html/wp-content wordpress bash
+      - docker compose exec -it --user www-data -w /var/www/html/wp-content wordpress bash
   wprb:
     dir: wordpress
     cmds:
