@@ -1,4 +1,7 @@
 # ベースイメージとしてWordPressの公式イメージを指定
+#FROM wordpress:php7.4-apache
+#FROM wordpress:php8.0-apache
+#FROM wordpress:php8.1-apache
 FROM wordpress:latest
 
 # 必要なパッケージの更新とvimのインストール
