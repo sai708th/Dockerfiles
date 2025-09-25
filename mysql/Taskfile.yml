@@ -33,13 +33,17 @@ tasks:
     silent: true
     cmds:
       - |
-        echo "⏳ waiting for database..."
+        set -e
+        echo "⏳ waiting for database (mysqladmin ping)..."
+        # コンテナ内で mysqladmin ping を実行して疎通確認
         for i in $(seq 1 60); do
-          status=$(docker inspect --format='{{json .State.Health.Status}}' mysql-min 2>/dev/null | tr -d '"')
-          [ "$status" = "healthy" ] && echo "✅ database is healthy" && exit 0
+          if docker compose exec -T {{.SERVICE}} sh -lc "mysqladmin ping -uroot -p{{.ROOT_PW}} --silent" >/dev/null 2>&1; then
+            echo "✅ database is ready"
+            exit 0
+          fi
           sleep 2
         done
-        echo "❌ DB not healthy in time"; exit 1
+        echo "❌ DB not ready in time"; exit 1
 
   mysql:
     desc: "mysql クライアント接続（対話）"
