@@ -1,0 +1,20 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: mysql-min
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-app}
+      TZ: Asia/Tokyo
+    ports:
+      - "3306:3306"   # 外部接続不要なら消してOK
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -uroot -p${MYSQL_ROOT_PASSWORD:-root} -h 127.0.0.1 --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  db_data:

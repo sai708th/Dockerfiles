@@ -1,0 +1,107 @@
+version: '3'
+dotenv: ['.env']  # 任意
+
+vars:
+  SERVICE: db
+  DB: '{{.MYSQL_DATABASE | default "app"}}'
+  ROOT_PW: '{{.MYSQL_ROOT_PASSWORD | default "root"}}'
+  FILE: '{{.FILE | default "dump.sql"}}'
+  TABLE: '{{.TABLE | default ""}}'
+  WHERE: '{{.WHERE | default ""}}'
+  SQL: '{{.SQL | default ""}}'
+  OUT: '{{.OUT | default ""}}'
+
+tasks:
+  up:
+    desc: "MySQL を起動"
+    cmds:
+      - docker compose up -d
+      - task: wait
+
+  down:
+    desc: "MySQL を停止・ボリューム削除"
+    cmds:
+      - docker compose down -v
+
+  logs:
+    desc: "ログ表示"
+    cmds:
+      - docker compose logs -f {{.SERVICE}}
+
+  wait:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        echo "⏳ waiting for database..."
+        for i in $(seq 1 60); do
+          status=$(docker inspect --format='{{json .State.Health.Status}}' mysql-min 2>/dev/null | tr -d '"')
+          [ "$status" = "healthy" ] && echo "✅ database is healthy" && exit 0
+          sleep 2
+        done
+        echo "❌ DB not healthy in time"; exit 1
+
+  mysql:
+    desc: "mysql クライアント接続（対話）"
+    cmds:
+      - docker compose exec {{.SERVICE}} mysql -uroot -p{{.ROOT_PW}} {{.DB}}
+
+  import:
+    desc: "SQL ダンプ（.sql または .sql.gz）をインポート。例: task import FILE=data.sql.gz"
+    cmds:
+      - task: wait
+      - |
+        set -e
+        if echo "{{.FILE}}" | grep -qiE '\.gz$'; then
+          echo "📦 importing gzipped: {{.FILE}} -> {{.DB}}"
+          gunzip -c "{{.FILE}}" | docker compose exec -T {{.SERVICE}} mysql -uroot -p{{.ROOT_PW}} {{.DB}}
+        else
+          echo "📦 importing: {{.FILE}} -> {{.DB}}"
+          docker compose exec -T {{.SERVICE}} mysql -uroot -p{{.ROOT_PW}} {{.DB}} < "{{.FILE}}"
+        fi
+        echo "✅ import done"
+
+  exec:
+    desc: "単発 SQL を実行。例: task exec SQL='SHOW TABLES;'"
+    cmds:
+      - task: wait
+      - |
+        [ -z "{{.SQL}}" ] && echo "SQL が空です（SQL='...')" && exit 1
+        docker compose exec -T {{.SERVICE}} mysql -uroot -p{{.ROOT_PW}} -e "{{.SQL}}" {{.DB}}
+
+  dump-table:
+    desc: "任意テーブルを条件付きでダンプ（データのみ）。例: task dump-table TABLE=users WHERE=\"id IN (1,2)\" OUT=users.sql"
+    cmds:
+      - task: wait
+      - |
+        set -e
+        [ -z "{{.TABLE}}" ] && echo "TABLE が必要です（TABLE=...）" && exit 1
+        OUTFILE="{{.OUT}}"
+        [ -z "$OUTFILE" ] && OUTFILE="{{.TABLE}}.sql"
+
+        WHERE_OPT=""
+        if [ -n "{{.WHERE}}" ]; then
+          WHERE_OPT="--where={{.WHERE}}"
+          echo "🧾 dumping {{.TABLE}} with WHERE: {{.WHERE}}"
+        else
+          echo "🧾 dumping {{.TABLE}} (all rows)"
+        fi
+
+        docker compose exec -T {{.SERVICE}} mysqldump -uroot -p{{.ROOT_PW}} \
+          --single-transaction --skip-triggers --no-create-info --compact \
+          --set-gtid-purged=OFF \
+          {{.DB}} {{.TABLE}} $WHERE_OPT > "$OUTFILE"
+
+        echo "✅ output: $OUTFILE"
+
+  dump-schema:
+    desc: "スキーマのみダンプ（全テーブル）。例: task dump-schema OUT=schema.sql"
+    cmds:
+      - task: wait
+      - |
+        OUTFILE="{{.OUT}}"
+        [ -z "$OUTFILE" ] && OUTFILE="schema.sql"
+        docker compose exec -T {{.SERVICE}} mysqldump -uroot -p{{.ROOT_PW}} \
+          --single-transaction --no-data --routines --events \
+          --set-gtid-purged=OFF {{.DB}} > "$OUTFILE"
+        echo "✅ output: $OUTFILE"
