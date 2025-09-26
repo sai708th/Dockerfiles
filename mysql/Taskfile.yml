@@ -48,7 +48,7 @@ tasks:
   mysql:
     desc: "mysql クライアント接続（対話）"
     cmds:
-      - docker compose exec {{.SERVICE}} mysql -uroot -p{{.ROOT_PW}} {{.DB}}
+      - docker compose exec {{.SERVICE}} mysql --default-character-set=utf8mb4 -uroot -p{{.ROOT_PW}} {{.DB}}
 
   import:
     desc: "SQL ダンプ（.sql または .sql.gz）をインポート。例: task import FILE=data.sql.gz"
@@ -71,7 +71,7 @@ tasks:
       - task: wait
       - |
         [ -z "{{.SQL}}" ] && echo "SQL が空です（SQL='...')" && exit 1
-        docker compose exec -T {{.SERVICE}} mysql -uroot -p{{.ROOT_PW}} -e "{{.SQL}}" {{.DB}}
+        docker compose exec -T {{.SERVICE}} mysql --default-character-set=utf8mb4 -uroot -p{{.ROOT_PW}} -e "{{.SQL}}" {{.DB}}
 
   dump-table:
     desc: "任意テーブルを条件付きでダンプ（データのみ）。例: task dump-table TABLE=users WHERE=\"id IN (1,2)\" OUT=users.sql"
@@ -108,4 +108,46 @@ tasks:
         docker compose exec -T {{.SERVICE}} mysqldump -uroot -p{{.ROOT_PW}} \
           --single-transaction --no-data --routines --events \
           --set-gtid-purged=OFF {{.DB}} > "$OUTFILE"
+        echo "✅ output: $OUTFILE"
+
+  # （任意）DBを消してボリュームも初期化したい場合の“ハードリセット”
+  db-reset:
+    desc: "コンテナ/ボリュームごと初期化 → 再起動 → DB再作成（最もクリーン）"
+    cmds:
+      - docker compose down -v
+      - docker compose up -d
+      - task: wait
+      - |
+        set -e
+        DB="{{.DB}}"; [ -z "$DB" ] && DB="app"
+        CHARSET="{{.CHARSET}}";   [ -z "$CHARSET" ] && CHARSET="utf8mb4"
+        COLLATION="{{.COLLATION}}"; [ -z "$COLLATION" ] && COLLATION="utf8mb4_unicode_ci"
+        docker compose exec -T {{.SERVICE}} mysql -uroot -p{{.ROOT_PW}} -e "
+          CREATE DATABASE IF NOT EXISTS \`$DB\` DEFAULT CHARACTER SET $CHARSET COLLATE $COLLATION;"
+        echo "✅ fresh volume & created $DB ($CHARSET / $COLLATION)"
+
+  export-tsv:
+    desc: "指定テーブルをTSV出力（タブ区切り、スプレッドシート貼り付け向け）。例: task export-tsv TABLE=wp_posts COLS='ID,post_title,post_date' WHERE='ID IN (1,2)' OUT=posts.tsv HEADER=true"
+    cmds:
+      - task: wait
+      - |
+        set -e
+        [ -z "{{.TABLE}}" ] && echo "TABLE が必要です（TABLE=...）" && exit 1
+        OUTFILE="{{.OUT}}";   [ -z "$OUTFILE" ] && OUTFILE="{{.TABLE}}.tsv"
+        COLS="{{.COLS}}";     [ -z "$COLS" ] && COLS="*"
+        WHERE_CLAUSE=""
+        if [ -n "{{.WHERE}}" ]; then
+          WHERE_CLAUSE=" WHERE {{.WHERE}}"
+        fi
+        HEADER="{{.HEADER}}"; [ -z "$HEADER" ] && HEADER="true"
+        SKIP=""
+        [ "$HEADER" = "false" ] && SKIP="--skip-column-names"
+
+        SQL="SELECT ${COLS} FROM {{.DB}}.{{.TABLE}}${WHERE_CLAUSE};"
+
+        # mysql の --batch 出力はタブ区切り。NULL(\N)は空文字に置換してTSV保存。
+        docker compose exec -T {{.SERVICE}} sh -lc "mysql --default-character-set=utf8mb4 -uroot -p{{.ROOT_PW}} {{.DB}} --batch $SKIP --raw -e \"$SQL\"" \
+        | awk -F'\t' 'BEGIN{OFS="\t"} {for(i=1;i<=NF;i++) if($i=="\\N") $i=""; print}' \
+        > "$OUTFILE"
+
         echo "✅ output: $OUTFILE"
