@@ -43,5 +43,5 @@ tasks:
   wprm:
     dir: wordpress
     cmds:
-      - docker-compose down --rmi -v local
+      - docker-compose down --rmi local -v
 
