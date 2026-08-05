@@ -1,14 +1,60 @@
-# ベースイメージとしてWordPressの公式イメージを指定
-# WORDPRESS_TAG は docker-compose.yaml の build.args (.env の WORDPRESS_TAG) から渡される。
-# 例:
-#   latest                  最新WPコア + 現行PHP
-#   php7.4-apache            最新WPコア + PHP7.4
-#   6.4-php8.1-apache        WP6.4 + PHP8.1 を固定
-#   5.7-php7.4-apache        WP5.7 + PHP7.4 を固定（古いサイトの再現用）
-# 指定可能な組み合わせは `task wpversions` で確認できる（Docker Hub上に存在するタグのみビルド可能）。
-# ※ 必ず `-apache` 系のタグを指定すること（このDockerfileはApacheベース前提）。
+# ベースイメージとしてWordPress公式イメージを指定。
+# 選択はPHPバージョンのみで決まる(WORDPRESS_TAG = php${PHP_VERSION}-apache)。
+# Docker Hub上のwordpressイメージはPHPを「マイナーバージョン」単位(例: php5.6)でしか
+# 選べず、パッチバージョン(例: 5.6.34)は指定できない。実際に入るのはそのタグが
+# 最後にビルドされた時点の最新パッチ(古いPHPほど固定化されている)。
+#
+# WPコアのバージョンはイメージに同梱されたものを使わず、常にwp-cliで
+# WP_VERSIONへ強制ダウングレード/アップグレードする(下記参照)。
+# そのためPHPバージョンとWPコアバージョンは完全に独立して指定できる。
+#
+# `task wpsetver WP=<WPコアバージョン> PHP=<PHPマイナーバージョン>` を実行すると
+# 自動的にこれらの値が .env に書き込まれる。
+#   task wpsetver WP=5.2.12 PHP=5.6   → PHP5.6系イメージ + WPコアを5.2.12に強制downgrade
+#   task wpsetver PHP=7.4             → PHP7.4系イメージ + WPコアはイメージ同梱のまま(最新)
+#   task wpsetver WP=6.4              → 現行PHPイメージ + WPコアを6.4に固定
+#   task wpsetver                     → PHP/WPともに既定(latest)
+# 指定可能なPHPマイナーバージョンは `task wpversions FILTER=phpX.Y` で確認できる。
 ARG WORDPRESS_TAG=latest
 FROM wordpress:${WORDPRESS_TAG}
+
+ARG PHP_VERSION=
+ARG WP_VERSION=
+ARG WPCLI_VERSION=
+
+# wp-cliをインストール
+# WPCLI_VERSIONが指定されていればそのバージョンに固定する。
+# wp-cliは新しいバージョンほど要求PHPが上がる(2.7.0以降はPHP7.2.24+必須)ため、
+# 古いPHP(5.6など)を使う場合は `task wpsetver` がWPCLI_VERSION=2.6.0を自動選択する
+# (2.6.0はPHP5.6〜8.1まで動作する最後の世代)。
+RUN set -eu; \
+    if [ -n "$WPCLI_VERSION" ]; then \
+      WPCLI_URL="https://github.com/wp-cli/wp-cli/releases/download/v${WPCLI_VERSION}/wp-cli-${WPCLI_VERSION}.phar"; \
+    else \
+      WPCLI_URL="https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar"; \
+    fi; \
+    echo "wp-cliを取得: $WPCLI_URL"; \
+    curl -fSL -o /usr/local/bin/wp "$WPCLI_URL" \
+    && chmod +x /usr/local/bin/wp \
+    && wp --info --allow-root
+
+# WPコアバージョンの強制指定
+# WP_VERSIONが指定されている場合、ベースイメージに同梱されたWPコアに関わらず、
+# wp-cliで /usr/src/wordpress を指定バージョンで上書きダウンロードする。
+# entrypoint(docker-entrypoint.sh)は初回起動時に /usr/src/wordpress の中身を
+# /var/www/html にコピーするため、これによりWPコアの正確なバージョンを反映できる。
+# ※ 指定したWPコアバージョンが指定PHPバージョンで動作するかは要確認
+#   (例: WP6.0以降はPHP5.6非対応、WP5.2系はPHP5.6対応)
+RUN if [ -n "$WP_VERSION" ]; then \
+      wp core download --version="${WP_VERSION}" --path=/usr/src/wordpress --force --allow-root; \
+    fi
+
+# ビルド後もイメージのラベルからPHP/WP/WP-CLIバージョンを確認できるように記録しておく
+# （例: docker image inspect <image> --format '{{json .Config.Labels}}' ）
+LABEL php.version="${PHP_VERSION}" \
+      wp.version="${WP_VERSION}" \
+      wpcli.version="${WPCLI_VERSION}" \
+      wordpress.tag="${WORDPRESS_TAG}"
 
 # 古いPHPバージョンのベースイメージはDebianの旧リリース（jessie/stretch/buster等）を
 # 使っており、EOLに伴いデフォルトのaptミラーが404になることがある。
@@ -26,11 +72,6 @@ RUN apt-get update || ( \
 
 # 必要なパッケージの更新とvimのインストール
 RUN apt-get update && apt-get install -y vim default-mysql-client
-
-# wp-cliをインストール
-RUN curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar \
-    && chmod +x wp-cli.phar \
-    && mv wp-cli.phar /usr/local/bin/wp
 
 RUN echo "alias ls='ls --color=auto'" >> ~/.bashrc
 

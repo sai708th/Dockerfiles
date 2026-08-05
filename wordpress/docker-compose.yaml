@@ -6,7 +6,10 @@ services:
       context: .
       dockerfile: wordpress.df
       args:
-        WORDPRESS_TAG: ${WORDPRESS_TAG:-latest}  # PHP/WPコアのバージョン指定。.env参照
+        WORDPRESS_TAG: ${WORDPRESS_TAG:-latest}   # ベースイメージのタグ(PHP_VERSIONから合成)。.env参照
+        PHP_VERSION: ${PHP_VERSION:-}             # 記録用(label)。ベースイメージ選択はWORDPRESS_TAGが担う
+        WP_VERSION: ${WP_VERSION:-}               # 指定時、wp-cliでこのWPコアバージョンに強制downgrade/upgrade
+        WPCLI_VERSION: ${WPCLI_VERSION:-}         # 指定時、wp-cliをこのバージョンに固定(古いPHP互換用)
     ports:
       - "8081:80"   
       - "8443:443" 

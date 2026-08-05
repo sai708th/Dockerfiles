@@ -6,7 +6,7 @@ vars:
   #     Homebrewで coreutils を入れて `md5sum` を使うか、
   #     もしくは `md5 -q` などで対応してください。
   #
-  # 例: 
+  # 例:
   #   ディレクトリ /home/yourname/projects/wordpress
   #   → md5sum は 5d41402abc4b2a76b9719d911017c592 ... (例)
   #   → cut で頭6文字: 5d4140
@@ -20,27 +20,37 @@ env:
 
 tasks:
   list:
+    desc: "利用可能なtask一覧を表示する"
     dir: .
     cmds:
       - task --list-all
 
   wpup:
+    desc: "wordpressコンテナ(wordpress/db)を起動する"
     dir: wordpress
     cmds:
       - docker compose up -d
+
   wpdn:
+    desc: "wordpressコンテナを停止する(データは保持)"
     dir: wordpress
     cmds:
-      - docker compose down 
+      - docker compose down
+
   wpin:
+    desc: "wordpressコンテナに www-data ユーザーでシェルログインする(wp-content配下)"
     dir: wordpress
     cmds:
       - docker compose exec -it --user www-data -w /var/www/html/wp-content wordpress bash
+
   wprb:
+    desc: "コンテナ/イメージを一度破棄してリビルドし直す(WORDPRESS_TAGの変更を反映する際に使用)"
     dir: wordpress
     cmds:
       - docker-compose down && docker-compose rm -f && docker image prune -f && docker-compose up --build -d
+
   wprm:
+    desc: "コンテナ・イメージ・ボリュームを全て削除する(DBデータも消えるので注意)"
     dir: wordpress
     cmds:
       - docker-compose down --rmi local -v
@@ -61,6 +71,64 @@ tasks:
         else
           echo "$RESULT" | wc -l | xargs -I{} echo "{} 件表示 (page_size=100, 100件超は FILTER でさらに絞り込んでください)"
           echo "$RESULT"
-          echo "→ WORDPRESS_TAG=<上記のタグ> を wordpress/.env に設定して 'task wprb' で再ビルドしてください。"
+          echo "→ 'task wpsetver WP=<WPバージョン> PHP=<PHPバージョン>' で反映できます。"
         fi
 
+  wpsetver:
+    desc: "PHPバージョン(ベースイメージ)とWPコアバージョン(wp-cliで強制反映)を個別に指定する。 例: task wpsetver WP=5.2.12 PHP=5.6 / task wpsetver PHP=8.1 / task wpsetver WP=6.4 / task wpsetver(引数なしでlatestに戻す)"
+    dir: wordpress
+    cmds:
+      - |
+        WP="{{.WP}}"
+        PHP="{{.PHP}}"
+        WPCLI="{{.WPCLI}}"
+
+        # ベースイメージのタグはPHPバージョンのみで決まる(WPコアはこの後wp-cliで別途上書きする)
+        if [ -n "$PHP" ]; then
+          TAG="php${PHP}-apache"
+        else
+          TAG="latest"
+        fi
+
+        echo "ベースイメージ wordpress:${TAG} をDocker Hubで確認中..."
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://hub.docker.com/v2/repositories/library/wordpress/tags/${TAG}")
+        if [ "$HTTP_CODE" != "200" ]; then
+          echo "エラー: wordpress:${TAG} はDocker Hub上に存在しません (HTTP ${HTTP_CODE})。"
+          echo "'task wpversions FILTER=php${PHP}' で存在するPHPバージョンを確認してください。"
+          exit 1
+        fi
+
+        # 古いPHP(7.2未満)では最新wp-cli(2.7.0+)が動かないため、互換バージョンを自動選択する
+        if [ -z "$WPCLI" ] && [ -n "$PHP" ]; then
+          case "$PHP" in
+            [0-9]*.[0-9]*)
+              if awk -v v="$PHP" 'BEGIN{exit !(v + 0 < 7.2)}' </dev/null; then
+                WPCLI="2.6.0"
+                echo "PHP ${PHP} は古いため、互換性のあるWP-CLI ${WPCLI} を自動選択しました(明示指定はWPCLI=で可能)"
+              fi
+              ;;
+          esac
+        fi
+
+        {
+          echo "# PHPバージョンとWPコアバージョンは独立して指定できる。"
+          echo "# 'task wpsetver WP=<WPコアバージョン> PHP=<PHPマイナーバージョン>' で自動更新される(手動編集も可)。"
+          echo "#"
+          echo "# 仕組み:"
+          echo "#   - WORDPRESS_TAG / PHP_VERSION: ベースイメージ(PHP)の選択。phpX.Y単位でのみ選択可。"
+          echo "#   - WP_VERSION: 指定するとビルド時にwp-cliでWPコアをこのバージョンに強制downgrade/upgradeする。"
+          echo "#   - WPCLI_VERSION: 古いPHPでは最新wp-cliが動かないため、互換バージョンに固定する。"
+          echo "#"
+          echo "# 例: task wpsetver WP=5.2.12 PHP=5.6 / task wpsetver PHP=7.4 / task wpsetver WP=6.4 / task wpsetver"
+          echo "# 指定可能なPHPバージョンは 'task wpversions FILTER=phpX.Y' で確認できる。"
+          echo "WORDPRESS_TAG=${TAG}"
+          echo "PHP_VERSION=${PHP}"
+          echo "WP_VERSION=${WP}"
+          echo "WPCLI_VERSION=${WPCLI}"
+        } > .env
+
+        echo "更新しました:"
+        echo "  ベースイメージ: wordpress:${TAG}"
+        echo "  WPコア強制バージョン: ${WP:-(未指定/イメージ同梱のまま)}"
+        echo "  WP-CLI: ${WPCLI:-(未指定/最新)}"
+        echo "反映するには 'task wprb' でイメージを再ビルドしてください。"
