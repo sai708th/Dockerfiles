@@ -5,6 +5,8 @@ services:
     build:
       context: .
       dockerfile: wordpress.df
+      args:
+        WORDPRESS_TAG: ${WORDPRESS_TAG:-latest}  # PHP/WPコアのバージョン指定。.env参照
     ports:
       - "8081:80"   
       - "8443:443" 

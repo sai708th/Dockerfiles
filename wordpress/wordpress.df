@@ -1,8 +1,28 @@
 # ベースイメージとしてWordPressの公式イメージを指定
-#FROM wordpress:php7.4-apache
-#FROM wordpress:php8.0-apache
-#FROM wordpress:php8.1-apache
-FROM wordpress:latest
+# WORDPRESS_TAG は docker-compose.yaml の build.args (.env の WORDPRESS_TAG) から渡される。
+# 例:
+#   latest                  最新WPコア + 現行PHP
+#   php7.4-apache            最新WPコア + PHP7.4
+#   6.4-php8.1-apache        WP6.4 + PHP8.1 を固定
+#   5.7-php7.4-apache        WP5.7 + PHP7.4 を固定（古いサイトの再現用）
+# 指定可能な組み合わせは `task wpversions` で確認できる（Docker Hub上に存在するタグのみビルド可能）。
+# ※ 必ず `-apache` 系のタグを指定すること（このDockerfileはApacheベース前提）。
+ARG WORDPRESS_TAG=latest
+FROM wordpress:${WORDPRESS_TAG}
+
+# 古いPHPバージョンのベースイメージはDebianの旧リリース（jessie/stretch/buster等）を
+# 使っており、EOLに伴いデフォルトのaptミラーが404になることがある。
+# 通常のaptリポジトリで失敗した場合のみarchive.debian.orgへ切り替えてリトライする。
+RUN apt-get update || ( \
+      sed -i \
+        -e 's|deb.debian.org|archive.debian.org|g' \
+        -e 's|security.debian.org|archive.debian.org|g' \
+        -e '/-updates/d' \
+        -e '/-backports/d' \
+        /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null; \
+      echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid; \
+      apt-get update \
+    )
 
 # 必要なパッケージの更新とvimのインストール
 RUN apt-get update && apt-get install -y vim default-mysql-client

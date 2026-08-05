@@ -45,3 +45,22 @@ tasks:
     cmds:
       - docker-compose down --rmi local -v
 
+  wpversions:
+    desc: "指定可能なWordPress公式イメージのタグ(PHP/WPバージョンの組み合わせ)をDocker Hubから検索して一覧表示する。 例: task wpversions FILTER=php7.4 / task wpversions FILTER=6.4"
+    dir: wordpress
+    cmds:
+      - |
+        FILTER="{{.FILTER}}"
+        URL="https://hub.docker.com/v2/repositories/library/wordpress/tags?page_size=100&ordering=last_updated"
+        if [ -n "$FILTER" ]; then
+          URL="${URL}&name=${FILTER}"
+        fi
+        RESULT=$(curl -s "$URL" | grep -oE '"name"[[:space:]]*:[[:space:]]*"[^"]+"' | sed -E 's/.*"([^"]+)"$/\1/' | sort -u)
+        if [ -z "$RESULT" ]; then
+          echo "該当タグなし、またはDocker Hub APIへの問い合わせに失敗しました。FILTERを変えるかネットワーク接続を確認してください。"
+        else
+          echo "$RESULT" | wc -l | xargs -I{} echo "{} 件表示 (page_size=100, 100件超は FILTER でさらに絞り込んでください)"
+          echo "$RESULT"
+          echo "→ WORDPRESS_TAG=<上記のタグ> を wordpress/.env に設定して 'task wprb' で再ビルドしてください。"
+        fi
+
