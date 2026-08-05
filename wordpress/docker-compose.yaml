@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   wordpress:
     build:
@@ -20,7 +18,11 @@ services:
       WORDPRESS_DB_NAME: exampledb
     volumes:
       - wordpress_data:/var/www/html
-      - ./wp/wp-config.php:/var/www/html/wp-config.php  # wp-config.phpをバインドマウント
+      # wp-config.phpは単体ファイルのbind mountにするとmacOS上でentrypointのsed -iが
+      # "Device or resource busy"になり起動できない(Docker Desktop/Colima双方で確認済み)。
+      # そのためbind mountせず、WORDPRESS_DB_*環境変数からentrypointに自動生成させる
+      # (生成された実体は wordpress_data ボリューム内)。内容を見たい/編集したい場合は
+      # `task wpconfig-pull` / `task wpconfig-push` を使う。
       - ./wp/wp-content:/var/www/html/wp-content  # wp-contentディレクトリをバインドマウント
     networks:
       - wordpress_network

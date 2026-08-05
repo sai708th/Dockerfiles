@@ -59,9 +59,11 @@ LABEL php.version="${PHP_VERSION}" \
 # 古いPHPバージョンのベースイメージはDebianの旧リリース（jessie/stretch/buster等）を
 # 使っており、EOLに伴いデフォルトのaptミラーが404になることがある。
 # 通常のaptリポジトリで失敗した場合のみarchive.debian.orgへ切り替えてリトライする。
-# archive.debian.org上のEOLリポジトリは署名鍵も期限切れ(EXPKEYSIG)になっているため、
-# 併せて署名検証もスキップする(ローカル開発用途のため許容)。
-RUN apt-get update || ( \
+# archive.debian.org上のEOLリポジトリは署名鍵も期限切れ(EXPKEYSIG)になっているうえ、
+# ネットワーク環境によってはハッシュ不整合等で不安定なことがある。
+# vim・mysql-client・opensslはWordPress自体の動作には必須ではないため、
+# このapt-get updateおよび以降のインストールはすべて失敗してもビルドを止めない(best-effort)。
+RUN ( apt-get update || ( \
       sed -i \
         -e 's|deb.debian.org|archive.debian.org|g' \
         -e 's|security.debian.org|archive.debian.org|g' \
@@ -73,33 +75,37 @@ RUN apt-get update || ( \
         echo 'Acquire::AllowInsecureRepositories "true";'; \
         echo 'Acquire::AllowDowngradeToInsecureRepositories "true";'; \
         echo 'APT::Get::AllowUnauthenticated "true";'; \
+        echo 'Acquire::Retries "2";'; \
+        echo 'Acquire::http::Timeout "15";'; \
+        echo 'Acquire::https::Timeout "15";'; \
       } > /etc/apt/apt.conf.d/99no-check-valid; \
+      rm -rf /var/lib/apt/lists/*; \
       apt-get update \
-    )
+    ) ) || echo "apt-get updateに失敗しましたが続行します(vim/mysql-client/opensslのインストールはスキップされます)"
 
-# 必要なパッケージの更新とvimのインストール
-RUN apt-get update && apt-get install -y vim default-mysql-client
+# vim・mysql-clientのインストール(失敗してもビルドは継続する)
+RUN apt-get install -y vim default-mysql-client \
+    || echo "vim/default-mysql-clientのインストールに失敗しましたが、WordPressの動作には影響しません"
 
 RUN echo "alias ls='ls --color=auto'" >> ~/.bashrc
 
 #------------------------
-# SSL
+# SSL (opensslが利用できた場合のみ設定する。失敗時はHTTP(8081)のみで動作する)
 #------------------------
-## 必要なパッケージをインストールし、自己署名証明書を生成
-RUN apt-get update && apt-get install -y openssl \
-    && mkdir -p /etc/ssl/private \
-    && openssl req -x509 -newkey rsa:4096 -keyout /etc/ssl/private/server.key -out /etc/ssl/certs/server.crt -days 365 -nodes -subj "/CN=localhost"
-
-# ApacheのSSLモジュールを有効化し、デフォルトのSSLサイト設定ファイルを追加
-RUN a2enmod ssl && a2ensite default-ssl
-
-# ApacheのSSL設定ファイルを更新（必要に応じて）
-RUN sed -i 's|SSLCertificateFile.*|SSLCertificateFile /etc/ssl/certs/server.crt|' /etc/apache2/sites-available/default-ssl.conf \
-    && sed -i 's|SSLCertificateKeyFile.*|SSLCertificateKeyFile /etc/ssl/private/server.key|' /etc/apache2/sites-available/default-ssl.conf
-
+RUN apt-get install -y openssl || echo "opensslのインストールに失敗しました"; \
+    if command -v openssl >/dev/null 2>&1; then \
+      mkdir -p /etc/ssl/private \
+      && openssl req -x509 -newkey rsa:4096 -keyout /etc/ssl/private/server.key -out /etc/ssl/certs/server.crt -days 365 -nodes -subj "/CN=localhost" \
+      && a2enmod ssl && a2ensite default-ssl \
+      && sed -i 's|SSLCertificateFile.*|SSLCertificateFile /etc/ssl/certs/server.crt|' /etc/apache2/sites-available/default-ssl.conf \
+      && sed -i 's|SSLCertificateKeyFile.*|SSLCertificateKeyFile /etc/ssl/private/server.key|' /etc/apache2/sites-available/default-ssl.conf \
+      && echo "SSL(8443)を有効化しました"; \
+    else \
+      echo "opensslが利用できないためSSL(8443)はスキップしました。HTTP(8081)のみ利用可能です。"; \
+    fi
 
 # 不要なパッケージ情報削除
-RUN rm -rf /var/lib/apt/lists/*
+RUN rm -rf /var/lib/apt/lists/* 2>/dev/null || true
 
 # Apacheを再起動
 CMD ["apache2-foreground"]

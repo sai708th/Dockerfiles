@@ -47,13 +47,44 @@ tasks:
     desc: "コンテナ/イメージを一度破棄してリビルドし直す(WORDPRESS_TAGの変更を反映する際に使用)"
     dir: wordpress
     cmds:
-      - docker-compose down && docker-compose rm -f && docker image prune -f && docker-compose up --build -d
+      - docker compose down && docker compose rm -f && docker image prune -f && docker compose up --build -d
+
+  wpps:
+    desc: "コンテナの起動状態を確認する(Up/Exited等)"
+    dir: wordpress
+    cmds:
+      - docker compose ps
+
+  wplogs:
+    desc: "wordpressコンテナのログを表示する(起動失敗時の原因調査に使用)"
+    dir: wordpress
+    cmds:
+      - docker compose logs --tail=200 wordpress
+
+  wpconfig-pull:
+    desc: "コンテナ内の実際のwp-config.phpを ./wp/wp-config.php にコピーして内容を確認する(bind mountはしていないので手動同期)"
+    dir: wordpress
+    cmds:
+      - docker compose cp wordpress:/var/www/html/wp-config.php ./wp/wp-config.php
+
+  wpconfig-push:
+    desc: "./wp/wp-config.php の内容をコンテナ内に反映する(編集後に実行。反映にはwpdn/wpupかコンテナ再起動が必要な場合あり)"
+    dir: wordpress
+    cmds:
+      - docker compose cp ./wp/wp-config.php wordpress:/var/www/html/wp-config.php
+
+  wpwipe:
+    desc: "コンテナとvolume(wordpress_data/db_data)だけ削除する(イメージは残るので再ビルド不要)。WPコアファイルの混在や壊れたDBを一掃したい時に使用"
+    dir: wordpress
+    cmds:
+      - docker compose down -v
+      - docker compose up -d
 
   wprm:
     desc: "コンテナ・イメージ・ボリュームを全て削除する(DBデータも消えるので注意)"
     dir: wordpress
     cmds:
-      - docker-compose down --rmi local -v
+      - docker compose down --rmi local -v
 
   wpversions:
     desc: "指定可能なWordPress公式イメージのタグ(PHP/WPバージョンの組み合わせ)をDocker Hubから検索して一覧表示する。 例: task wpversions FILTER=php7.4 / task wpversions FILTER=6.4"
