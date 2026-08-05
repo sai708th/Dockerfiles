@@ -59,6 +59,8 @@ LABEL php.version="${PHP_VERSION}" \
 # 古いPHPバージョンのベースイメージはDebianの旧リリース（jessie/stretch/buster等）を
 # 使っており、EOLに伴いデフォルトのaptミラーが404になることがある。
 # 通常のaptリポジトリで失敗した場合のみarchive.debian.orgへ切り替えてリトライする。
+# archive.debian.org上のEOLリポジトリは署名鍵も期限切れ(EXPKEYSIG)になっているため、
+# 併せて署名検証もスキップする(ローカル開発用途のため許容)。
 RUN apt-get update || ( \
       sed -i \
         -e 's|deb.debian.org|archive.debian.org|g' \
@@ -66,7 +68,12 @@ RUN apt-get update || ( \
         -e '/-updates/d' \
         -e '/-backports/d' \
         /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null; \
-      echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid; \
+      { \
+        echo 'Acquire::Check-Valid-Until "false";'; \
+        echo 'Acquire::AllowInsecureRepositories "true";'; \
+        echo 'Acquire::AllowDowngradeToInsecureRepositories "true";'; \
+        echo 'APT::Get::AllowUnauthenticated "true";'; \
+      } > /etc/apt/apt.conf.d/99no-check-valid; \
       apt-get update \
     )
 
